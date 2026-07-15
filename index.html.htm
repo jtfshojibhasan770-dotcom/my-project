@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Secure Folder</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        
+        body { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            padding: 15px; 
+            color: white; 
+            overflow-x: hidden;
+            position: relative;
+            background: #0f172a; /* ডিফল্ট ব্যাকগ্রাউন্ড */
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-attachment: fixed;
+            background-size: cover;
+            transition: background-image 0.8s ease-in-out;
+        }
+
+        /* ব্যাকগ্রাউন্ডের ওপরে ডার্ক ওভারলে */
+        .bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.65); 
+            z-index: -1;
+        }
+
+        /* 📦 মূল কন্টেইনার */
+        .container { 
+            width: 100%; 
+            max-width: 420px; 
+            background: rgba(15, 23, 42, 0.7); 
+            backdrop-filter: blur(25px); 
+            -webkit-backdrop-filter: blur(25px);
+            border-radius: 24px; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+            transition: max-width 0.5s ease;
+        }
+
+        /* লগইন স্ক্রিন সচল থাকলে কন্টেইনারটি চওড়া হবে */
+        .container.login-wide {
+            max-width: 780px; 
+        }
+
+        #loginScreen, #folderSelection, #passwordModal, #folderContent { 
+            display: none; 
+        }
+
+        /* 🎨 লগইন বক্সের ভেতরের স্প্লিট লেআউট */
+        .login-split {
+            display: flex;
+            width: 100%;
+            min-height: 420px;
+        }
+
+        /* লগইন বক্সের ভেতরের বাম পাশের ফটো এরিয়া */
+        .login-image-side {
+            flex: 1;
+            background-color: #1e293b; /* ছবি লোড হওয়ার আগের ডিফল্ট কালার */
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: cover;
+            position: relative;
+        }
+
+        /* লগইন বক্সের ভেতরের ডান পাশের ইনপুট এরিয়া */
+        .login-form-side {
+            flex: 1;
+            padding: 40px 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* ফোল্ডার এবং পাসওয়ার্ড মোডালের সাধারণ প্যাডিং */
+        .standard-padding {
+            padding: 40px 30px;
+        }
+
+        /* Voltrex টাইটেল স্টাইল */
+        h2 {
+            margin-bottom: 25px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            font-size: 24px;
+            color: #ffffff;
+            text-align: center;
+        }
+
+        /* Voltrex বর্ডার লেবেল ইনপুট ডিজাইন */
+        .voltrex-field {
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            text-align: left;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* যখন ইনপুটে ফোকাস করা হবে */
+        .voltrex-field:focus-within {
+            border-color: #10b981;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+        }
+
+        /* ইনপুটের ওপরে ভাসমান লেবেল */
+        .voltrex-label {
+            position: absolute;
+            top: -10px;
+            left: 15px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            background: #151d30; 
+            padding: 0 8px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            border-radius: 4px;
+            transition: color 0.3s ease;
+        }
+
+        .voltrex-field:focus-within .voltrex-label {
+            color: #10b981;
+        }
+
+        /* ইনপুট ফিল্ডের নিজের স্টাইল */
+        .voltrex-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            padding: 16px;
+            color: white;
+            font-size: 15px;
+            outline: none;
+        }
+
+        /* ডানপাশের আইকনগুলোর জন্য রেডি কন্টেইনার */
+        .voltrex-icons {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 5;
+        }
+
+        /* সবুজ টিক চিহ্নের স্টাইল */
+        .success-tick {
+            color: #10b981; 
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        /* পাসওয়ার্ড দেখানোর চোখের আইকন */
+        .toggle-password {
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 16px;
+            transition: color 0.3s ease;
+        }
+
+        .toggle-password:hover {
+            color: #10b981;
+        }
+
+        /* এরর মেসেজের ডিজাইন */
+        .error-message {
+            color: #ef4444; 
+            font-size: 14px; 
+            margin-top: -10px; 
+            margin-bottom: 15px; 
+            font-weight: 600; 
+            display: none;
+            text-align: left;
+            padding-left: 5px;
+        }
+
+        /* Voltrex স্টাইল বাটন */
+        .btn { 
+            width: 100%; 
+            padding: 14px; 
+            background: #10b981; 
+            border: none; 
+            border-radius: 12px; 
+            color: white; 
+            font-weight: bold; 
+            font-size: 16px;
+            cursor: pointer; 
+            margin: 10px 0; 
+            transition: background 0.3s ease, transform 0.1s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .btn:hover { 
+            background: #059669; 
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        /* ব্যাকে যাওয়ার ধূসর বাটন */
+        .btn-secondary {
+            background: #475569;
+            box-shadow: none;
+        }
+        .btn-secondary:hover {
+            background: #334155;
+            box-shadow: none;
+        }
+
+        /* রেসপনসিভ ফোল্ডার গ্রিড */
+        .folder-grid { 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 12px; 
+            margin-top: 15px; 
+        }
+
+        .folder-btn { 
+            padding: 18px 10px; 
+            background: rgba(255, 255, 255, 0.05); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-radius: 16px; 
+            color: white; 
+            font-weight: 600; 
+            font-size: 14px;
+            cursor: pointer; 
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .folder-btn:hover { 
+            background: #10b981; 
+            border-color: #10b981;
+            transform: translateY(-2px);
+        }
+
+        /* ইমেজ গ্যালারি কন্টেইনার */
+        .gallery-container {
+            max-height: 350px;
+            overflow-y: auto;
+            margin-top: 15px;
+            padding-right: 5px;
+        }
+
+        .gallery-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        .gallery-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        /* 📱 মোবাইলের জন্য রেসপনসিভ ডিজাইন */
+        @media (max-width: 768px) {
+            .container.login-wide {
+                max-width: 400px; 
+            }
+            .login-split {
+                flex-direction: column; 
+            }
+            .login-image-side {
+                height: 200px; 
+                flex: none;
+            }
+            .login-form-side {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="bg-overlay"></div>
+
+<div class="container login-wide" id="mainContainer">
+    
+    <div id="loginScreen" style="display: block;">
+        <div class="login-split">
+            <div class="login-image-side" id="loginBoxImage"></div>
+            
+            <div class="login-form-side">
+                <h2><b>FAST LOGIN</b></h2>
+                
+                <div class="voltrex-field">
+                    <span class="voltrex-label">Master Username</span>
+                    <input type="text" id="masterUser" class="voltrex-input" oninput="checkInputStatus('masterUser', 'userTick')">
+                    <div class="voltrex-icons">
+                        <i class="fa-solid fa-circle-check success-tick" id="userTick"></i>
+                    </div>
+                </div>
+
+                <div class="voltrex-field">
+                    <span class="voltrex-label">Master Password</span>
+                    <input type="password" id="masterPass" class="voltrex-input" oninput="checkInputStatus('masterPass', 'passTick')">
+                    <div class="voltrex-icons">
+                        <i class="fa-solid fa-circle-check success-tick" id="passTick"></i>
+                        <i class="fa-solid fa-eye toggle-password" id="masterEyeIcon" onclick="toggleMasterPasswordVisibility()"></i>
+                    </div>
+                </div>
+
+                <div id="masterErrorMsg" class="error-message"></div>
+
+                <button class="btn" onclick="verifyMaster()">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="folderSelection" class="standard-padding">
+        <h2>Select Folder</h2>
+        <div class="folder-grid" id="grid"></div>
+    </div>
+
+    <div id="passwordModal" class="standard-padding">
+        <h2 id="modalTitle">Enter Password</h2>
+        
+        <div class="voltrex-field">
+            <span class="voltrex-label">Folder Password</span>
+            <input type="password" id="folderPassInput" class="voltrex-input" oninput="checkInputStatus('folderPassInput', 'folderTick')">
+            <div class="voltrex-icons">
+                <i class="fa-solid fa-circle-check success-tick" id="folderTick"></i>
+                <i class="fa-solid fa-eye toggle-password" id="folderEyeIcon" onclick="toggleFolderPasswordVisibility()"></i>
+            </div>
+        </div>
+
+        <div id="folderErrorMsg" class="error-message"></div>
+
+        <button class="btn" onclick="validatePassword()">Submit</button>
+        <button class="btn btn-secondary" onclick="goBack()">Back</button>
+    </div>
+
+    <div id="folderContent" class="standard-padding">
+        <h2 id="folderTitle"></h2>
+        <div class="gallery-container" id="galleryArea"></div>
+        <br>
+        <button class="btn btn-secondary" onclick="goBack()">Back to Folders</button>
+    </div>
+
+</div>
+
+<script>
+    // Firebase কনফিগারেশন
+    const firebaseConfig = {
+        apiKey: "AIzaSyD0d6OlqFHXG5BAirybZYDt-NWKzr6tLYE",
+        authDomain: "my-photo-album-770.firebaseapp.com",
+        projectId: "my-photo-album-770",
+        storageBucket: "my-photo-album-770.firebasestorage.app",
+        messagingSenderId: "129231696745",
+        appId: "1:129231696745:web:b0126324003a7a014343f8",
+        measurementId: "G-WY729LXBBE"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let currentFolderId = null;
+
+    // 🌟 ফায়ারবেস থেকে বাইরের ব্যাকগ্রাউন্ড এবং ভেতরের লগইন ইমেজ একসাথে লোড করার ফাংশন
+    function loadFirebaseAssets() {
+        // ১. বাইরের ব্যাকগ্রাউন্ড লোড
+        db.collection("secrets").doc("backgrounds").get().then((doc) => {
+            if (doc.exists && doc.data().bgList && doc.data().bgList.length > 0) {
+                const bgImages = doc.data().bgList;
+                const randomIndex = Math.floor(Math.random() * bgImages.length);
+                const selectedImage = bgImages[randomIndex];
+                
+                const img = new Image();
+                img.onload = function() {
+                    document.body.style.backgroundImage = "url('" + selectedImage + "')";
+                };
+                img.src = selectedImage;
+            }
+        }).catch((error) => {
+            console.error("Error fetching background: ", error);
+        });
+
+        // ২. লগইন বক্সের ভেতরের ছবি লোড
+        db.collection("secrets").doc("loginImageDoc").get().then((doc) => {
+            if (doc.exists && doc.data().loginPicUrl) {
+                const loginPic = doc.data().loginPicUrl;
+                document.getElementById('loginBoxImage').style.backgroundImage = "url('" + loginPic + "')";
+            }
+        }).catch((error) => {
+            console.error("Error fetching login image: ", error);
+        });
+    }
+
+    // পেজ লোড হলেই ফায়ারবেস অ্যাসেট কল হবে
+    window.addEventListener('DOMContentLoaded', loadFirebaseAssets);
+
+    // ইনপুটে কিছু টাইপ করলেই সবুজ টিক চিহ্ন দেখানোর লজিক
+    function checkInputStatus(inputId, tickId) {
+        const inputValue = document.getElementById(inputId).value;
+        const tickElement = document.getElementById(tickId);
+        
+        if (inputValue.trim().length > 0) {
+            tickElement.style.opacity = "1";
+        } else {
+            tickElement.style.opacity = "0";
+        }
+    }
+
+    // মাস্টার লগইনের চোখের আইকন ক্লিক করার লজিক
+    function toggleMasterPasswordVisibility() {
+        const passwordInput = document.getElementById('masterPass');
+        const eyeIcon = document.getElementById('masterEyeIcon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.classList.remove('fa-eye');
+            eyeIcon.classList.add('fa-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.classList.remove('fa-eye-slash');
+            eyeIcon.classList.add('fa-eye');
+        }
+    }
+
+    // ফোল্ডার পাসওয়ার্ডের চোখের আইকন ক্লিক করার লজিক
+    function toggleFolderPasswordVisibility() {
+        const passwordInput = document.getElementById('folderPassInput');
+        const eyeIcon = document.getElementById('folderEyeIcon');
+        
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.classList.remove('fa-eye');
+            eyeIcon.classList.add('fa-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.classList.remove('fa-eye-slash');
+            eyeIcon.classList.add('fa-eye');
+        }
+    }
+
+    function verifyMaster() {
+        const uName = document.getElementById('masterUser').value;
+        const uPass = document.getElementById('masterPass').value;
+        const mErrorDiv = document.getElementById('masterErrorMsg');
+
+        mErrorDiv.style.display = "none";
+        mErrorDiv.textContent = "";
+
+        db.collection("secrets").doc("master").get().then((doc) => {
+            if (doc.exists && uName === doc.data().username && uPass === doc.data().password) {
+                document.getElementById('mainContainer').classList.remove('login-wide');
+                document.getElementById('loginScreen').style.display = "none";
+                document.getElementById('folderSelection').style.display = "block";
+                generateFolders();
+            } else { 
+                mErrorDiv.textContent = "⚠ Wrong Master Credentials!";
+                mErrorDiv.style.display = "block";
+            }
+        }).catch((error) => {
+            console.error("Login Error: ", error);
+        });
+    }
+
+    function generateFolders() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = ""; 
+        for(let i=1; i<=10; i++) {
+            grid.innerHTML += `<button class="folder-btn" onclick="selectFolder(${i})">Folder ${i}</button>`;
+        }
+    }
+
+    function selectFolder(id) {
+        currentFolderId = id;
+        document.getElementById('folderSelection').style.display = "none";
+        document.getElementById('passwordModal').style.display = "block";
+        document.getElementById('modalTitle').textContent = "Password for Folder " + id;
+        document.getElementById('folderPassInput').value = "";
+        
+        document.getElementById('folderTick').style.opacity = "0";
+        const fErrorDiv = document.getElementById('folderErrorMsg');
+        fErrorDiv.style.display = "none";
+        fErrorDiv.textContent = "";
+
+        const passwordInput = document.getElementById('folderPassInput');
+        const eyeIcon = document.getElementById('folderEyeIcon');
+        passwordInput.type = 'password';
+        eyeIcon.classList.remove('fa-eye-slash');
+        eyeIcon.classList.add('fa-eye');
+    }
+
+    function validatePassword() {
+        const pass = document.getElementById('folderPassInput').value;
+        const fErrorDiv = document.getElementById('folderErrorMsg');
+        
+        fErrorDiv.style.display = "none";
+        fErrorDiv.textContent = "";
+
+        db.collection("secrets").doc("folders").get().then((doc) => {
+            if (doc.exists) {
+                const dbData = doc.data();
+                
+                const correctPass = dbData['folder ' + currentFolderId]; 
+                const images = dbData['folder' + currentFolderId + '_images']; 
+
+                if (pass === correctPass) {
+                    document.getElementById('passwordModal').style.display = "none";
+                    document.getElementById('folderContent').style.display = "block";
+                    document.getElementById('folderTitle').textContent = "Folder " + currentFolderId;
+                    
+                    let galleryHTML = "";
+                    if(images && images.length > 0) {
+                        images.forEach(url => {
+                            galleryHTML += `<img src="${url}" style="width: 100%; border-radius: 12px; margin-bottom: 12px; display: block;">`;
+                        });
+                    } else {
+                        galleryHTML = "<p>No images found in this folder.</p>";
+                    }
+
+                    document.getElementById('galleryArea').innerHTML = galleryHTML;
+                } else {
+                    fErrorDiv.textContent = "⚠ Wrong Password!";
+                    fErrorDiv.style.display = "block";
+                }
+            }
+        }).catch((error) => {
+            console.error("Error loading folder contents: ", error);
+        });
+    }
+
+    function goBack() {
+        document.getElementById('passwordModal').style.display = "none";
+        document.getElementById('folderContent').style.display = "none";
+        document.getElementById('folderSelection').style.display = "block";
+    }
+</script>
+</body>
+</html>
